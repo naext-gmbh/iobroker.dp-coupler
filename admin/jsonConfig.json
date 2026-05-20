@@ -1,0 +1,81 @@
+{
+    "type": "tabs",
+    "items": {
+        "tab_mapping": {
+            "type": "panel",
+            "label": "Mapping",
+            "items": {
+                "mappingsRaw": {
+                    "type": "jsonEditor",
+                    "label": "Mappings (JSON array)"
+                }
+            }
+        },
+        "tab_defaults": {
+            "type": "panel",
+            "label": "Adapter-Settings",
+            "items": {
+                "hdr_sync": {
+                    "type": "staticText",
+                    "text": "Periodic sync"
+                },
+                "syncIntervalValue": {
+                    "type": "slider",
+                    "label": "Interval",
+                    "help": "0 = disabled. When set, all target datapoints are re-written at this interval with the last known source value (heartbeat/refresh). Only the forward direction (source → target) is synced; the reverse direction of bidirectional entries is not included in periodic updates.",
+                    "min": 0,
+                    "max": 200,
+                    "step": 1,
+                    "def": 0,
+                    "sm": 9
+                },
+                "syncUnit": {
+                    "type": "select",
+                    "label": "Unit",
+                    "options": [
+                        {"label": "ms", "value": "ms"},
+                        {"label": "s",  "value": "s"},
+                        {"label": "min","value": "min"},
+                        {"label": "h",  "value": "h"}
+                    ],
+                    "def": "ms",
+                    "sm": 3
+                },
+                "relayOnChange": {
+                    "type": "checkbox",
+                    "label": "Also relay on change (in addition to periodic sync)",
+                    "help": "When periodic sync is active (interval > 0), also relay immediately on source value change. Has no effect when interval is 0 — event-driven relay is always active then.",
+                    "def": false,
+                    "newLine": true,
+                    "disabled": "(!data.syncIntervalValue)"
+                },
+                "divider_1": {
+                    "type": "staticText",
+                    "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+                    "newLine": true
+                },
+                "forwardOnAckDefault": {
+                    "type": "checkbox",
+                    "label": "Forward on ACK (trigger on ack=true)",
+                    "def": false,
+                    "newLine": true
+                },
+                "forwardChangesOnlyDefault": {
+                    "type": "checkbox",
+                    "label": "Forward value changes only",
+                    "def": true
+                },
+                "propagateAckDefault": {
+                    "type": "checkbox",
+                    "label": "Propagate ACK flag to target",
+                    "def": false
+                },
+                "hdr_defaults": {
+                    "type": "staticText",
+                    "text": "Relay defaults are applied to all mapping entries unless overridden per entry.",
+                    "newLine": true
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,17 @@
+/.cproject
+/.project
+/.settings/
+/.claude/
+
+
+# ioBroker dev-server
+.dev-server/
+/node_modules/
+/Toolchain/
+/ccode-keepalive.sh
+/ccode-session-root.sh
+/ccode-session.sh
+/ccode-stop.sh
+/ccode.mounts
+/ccodevars.env
+/dev-server.log

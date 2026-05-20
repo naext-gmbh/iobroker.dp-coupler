@@ -1,0 +1,31 @@
+{
+  "name": "iobroker.dp-coupler",
+  "version": "0.1.0",
+  "description": "ioBroker adapter: relay state changes between datapoints via JSON mapping",
+  "author": "Johannes Lode, NAEXT GmbH",
+  "license": "AGPL-3.0-only",
+  "main": "build/main.js",
+  "dependencies": {
+    "@iobroker/adapter-core": "^3.1.4"
+  },
+  "devDependencies": {
+    "@iobroker/dev-server": "^0.8.0",
+    "@types/node": "^20.0.0",
+    "@types/sinonjs__fake-timers": "^15.0.1",
+    "typescript": "^5.4.0"
+  },
+  "overrides": {
+    "sinon": "~18"
+  },
+  "scripts": {
+    "build": "npx tsc -p tsconfig.json",
+    "watch": "npx tsc -p tsconfig.json --watch",
+    "start": "node build/main.js --install",
+    "dev-server": "dev-server watch",
+    "dev-server:setup": "dev-server setup",
+    "dev-server:start": "dev-server start"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

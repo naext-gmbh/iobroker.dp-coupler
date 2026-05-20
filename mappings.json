@@ -1,0 +1,14 @@
+[
+  {
+    "_comment": "Leistungsvorgabe Quadragon → User-Data-Spiegel",
+    "source": "modbus.0.holdingRegisters.8",
+    "target": "0_userdata.0.battery.powerSetpoint",
+    "bidirectional": false
+  },
+  {
+    "_comment": "SOC lesen",
+    "source": "modbus.0.holdingRegisters.14",
+    "target": "0_userdata.0.battery.soc",
+    "bidirectional": false
+  }
+]

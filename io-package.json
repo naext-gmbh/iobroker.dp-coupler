@@ -1,0 +1,66 @@
+{
+  "common": {
+    "name": "dp-coupler",
+    "version": "0.1.0",
+    "news": {
+      "0.1.0": {
+        "en": "Initial proof-of-concept release"
+      }
+    },
+    "title": "Datapoint Relay",
+    "titleLang": {
+      "en": "Datapoint Relay",
+      "de": "Datenpunkt-Relay"
+    },
+    "desc": {
+      "en": "Relays state changes between arbitrary datapoints via a JSON mapping file.",
+      "de": "Leitet Zustandsänderungen zwischen beliebigen Datenpunkten über eine JSON-Mapping-Datei weiter."
+    },
+    "authors": ["Johannes Lode, NAEXT GmbH"],
+    "keywords": ["relay", "mapping", "sync"],
+    "license": "AGPL-3.0-only",
+    "mode": "daemon",
+    "adminUI": { "config": "json" },
+    "type": "general",
+    "icon": "admin/dp-coupler.png",
+    "enabled": true,
+    "readme": "https://github.com/johannes-lode/ioBroker.dp-coupler/blob/main/README.md",
+    "loglevel": "info",
+    "supportCustoms": false,
+    "connectionType": "local",
+    "dataSource": "push"
+  },
+  "native": {
+    "mappingsRaw": "[]",
+    "forwardOnAckDefault": false,
+    "forwardChangesOnlyDefault": true,
+    "propagateAckDefault": false,
+    "syncIntervalValue": 0,
+    "syncUnit": "ms",
+    "relayOnChange": false
+  },
+  "objects": [],
+  "instanceObjects": [
+    {
+      "_id": "info",
+      "type": "channel",
+      "common": {
+        "name": "Information"
+      },
+      "native": {}
+    },
+    {
+      "_id": "info.connection",
+      "type": "state",
+      "common": {
+        "role": "indicator.connected",
+        "name": "Adapter connected and mapping loaded",
+        "type": "boolean",
+        "read": true,
+        "write": false,
+        "def": false
+      },
+      "native": {}
+    }
+  ]
+}
