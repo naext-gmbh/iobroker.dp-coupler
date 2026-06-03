@@ -54,6 +54,11 @@
                     "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
                     "newLine": true
                 },
+                "hdr_defaults": {
+                    "type": "staticText",
+                    "text": "Relay defaults are applied to all mapping entries unless overridden per entry.",
+                    "newLine": true
+                },
                 "forwardOnAckDefault": {
                     "type": "checkbox",
                     "label": "Forward on ACK (trigger on ack=true)",
@@ -70,10 +75,11 @@
                     "label": "Propagate ACK flag to target",
                     "def": false
                 },
-                "hdr_defaults": {
-                    "type": "staticText",
-                    "text": "Relay defaults are applied to all mapping entries unless overridden per entry.",
-                    "newLine": true
+                "enabledDefault": {
+                    "type": "checkbox",
+                    "label": "Enable flag default",
+                    "help": "Initial state of the per-channel enabled datapoint. Can be overridden per entry via the 'enabled' field of the mapping entry and toggled at runtime via the channels.<id>.enabled datapoints.",
+                    "def": true
                 }
             }
         }

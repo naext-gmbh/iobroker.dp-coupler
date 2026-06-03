@@ -9,8 +9,8 @@
     },
     "title": "Datapoint Relay",
     "titleLang": {
-      "en": "Datapoint Relay",
-      "de": "Datenpunkt-Relay"
+      "en": "Datapoint Coupler",
+      "de": "Datenpunkt-Koppler"
     },
     "desc": {
       "en": "Relays state changes between arbitrary datapoints via a JSON mapping file.",
@@ -37,7 +37,8 @@
     "propagateAckDefault": false,
     "syncIntervalValue": 0,
     "syncUnit": "ms",
-    "relayOnChange": false
+    "relayOnChange": false,
+    "enabledDefault": true
   },
   "objects": [],
   "instanceObjects": [

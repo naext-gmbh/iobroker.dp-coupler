@@ -34,6 +34,7 @@ declare global {
             syncIntervalValue: number; // numeric part of the sync interval; 0 = disabled
             syncUnit: string;          // unit: "ms" | "s" | "min" | "h"
             relayOnChange: boolean;    // when sync active: also relay on event; irrelevant when sync disabled
+            enabledDefault: boolean;   // initial enabled state for per-channel datapoints
         }
     }
 }
@@ -49,6 +50,7 @@ interface MappingEntry {
     forwardOnAck?: boolean;
     forwardChangesOnly?: boolean;
     propagateAck?: boolean;
+    enabled?: boolean;               // seed value for the channels.<id>.enabled datapoint
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +61,14 @@ function isMappingEntry(value: unknown): value is MappingEntry {
     if (typeof value !== "object" || value === null) return false;
     const obj = value as Record<string, unknown>;
     return typeof obj["source"] === "string" && typeof obj["target"] === "string";
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function sourceToChannelId(source: string): string {
+    return source.replace(/\./g, "_");
 }
 
 // ---------------------------------------------------------------------------
@@ -75,10 +85,12 @@ function dpcLog(...args: unknown[]): void {
 // ---------------------------------------------------------------------------
 
 class DpCoupler extends utils.Adapter {
-    private readonly sourceIndex = new Map<string, MappingEntry>();
-    private readonly targetIndex = new Map<string, MappingEntry>();
-    private readonly inFlight    = new Set<string>();
-    private readonly lastState   = new Map<string, ioBroker.State>();
+    private readonly sourceIndex       = new Map<string, MappingEntry>();
+    private readonly targetIndex       = new Map<string, MappingEntry>();
+    private readonly inFlight          = new Set<string>();
+    private readonly lastState         = new Map<string, ioBroker.State>();
+    private readonly enabledMap        = new Map<string, boolean>();
+    private readonly enabledDpToSource = new Map<string, string>();
     private syncTimer: ReturnType<typeof setInterval> | null = null;
     private syncIntervalMs = 0;
     private unloading = false;
@@ -149,6 +161,66 @@ class DpCoupler extends utils.Adapter {
             }
         }
 
+        // Build per-channel objects (channels.<id>.enabled + .lastValue) for all active entries.
+        for (const [sourceId, entry] of this.sourceIndex) {
+            const channelId = sourceToChannelId(sourceId);
+
+            // Determine source datapoint type for the lastValue object definition.
+            let sourceType: ioBroker.CommonType = "mixed";
+            try {
+                const srcObj = await this.getForeignObjectAsync(sourceId);
+                if (srcObj && srcObj.type === "state" && srcObj.common.type) {
+                    sourceType = srcObj.common.type;
+                }
+            } catch { /* fallback to mixed */ }
+
+            await this.setObjectAsync(`channels.${channelId}`, {
+                type: "channel",
+                common: { name: sourceId },
+                native: {},
+            });
+            await this.setObjectAsync(`channels.${channelId}.enabled`, {
+                type: "state",
+                common: {
+                    role: "switch.enable",
+                    name: "Channel enabled",
+                    type: "boolean",
+                    read: true,
+                    write: true,
+                    def: true,
+                },
+                native: {},
+            });
+            await this.setObjectAsync(`channels.${channelId}.lastValue`, {
+                type: "state",
+                common: {
+                    role: "state",
+                    name: "Last relayed value",
+                    type: sourceType,
+                    read: true,
+                    write: false,
+                },
+                native: {},
+            });
+
+            // Seed enabled state only when no value exists yet (first start).
+            const existingEnabled = await this.getStateAsync(`channels.${channelId}.enabled`);
+            let currentEnabled: boolean;
+            if (existingEnabled?.val !== null && existingEnabled?.val !== undefined) {
+                currentEnabled = Boolean(existingEnabled.val);
+            } else {
+                currentEnabled = typeof entry.enabled === "boolean"
+                    ? entry.enabled
+                    : (this.config.enabledDefault ?? true);
+                await this.setStateAsync(`channels.${channelId}.enabled`, { val: currentEnabled, ack: true });
+            }
+            this.enabledMap.set(sourceId, currentEnabled);
+            this.enabledDpToSource.set(`${this.namespace}.channels.${channelId}.enabled`, sourceId);
+        }
+
+        // Subscribe to own enabled datapoints so runtime changes update enabledMap.
+        await this.subscribeStatesAsync("channels.*.enabled");
+
         const subscriptions = Array.from(new Set([
             ...this.sourceIndex.keys(),
             ...this.targetIndex.keys(),
@@ -161,6 +233,21 @@ class DpCoupler extends utils.Adapter {
                 if (st && st.val !== null && st.val !== undefined)
                     this.lastState.set(sourceId, st);
             } catch { /* non-fatal – cache stays empty for this source */ }
+        }
+
+        // Pre-populate lastValue from lastState cache, preserving the original timestamps
+        // so the displayed value age reflects the real source event, not the adapter start.
+        for (const [sourceId, cached] of this.lastState) {
+            const channelId = sourceToChannelId(sourceId);
+            try {
+                await this.setStateAsync(`channels.${channelId}.lastValue`, {
+                    val: cached.val,
+                    ack: true,
+                    ts:  cached.ts,
+                    lc:  cached.lc,
+                    q:   cached.q,
+                });
+            } catch { /* non-fatal */ }
         }
 
         const unitMultipliers: Record<string, number> = { ms: 1, s: 1000, min: 60000, h: 3600000 };
@@ -205,6 +292,19 @@ class DpCoupler extends utils.Adapter {
     ): Promise<void> {
         if (!state || state.val === null || state.val === undefined) return;
 
+        // Own enabled datapoint changed: update cache and confirm command if needed.
+        const enabledSource = this.enabledDpToSource.get(id);
+        if (enabledSource !== undefined) {
+            const newVal = Boolean(state.val);
+            this.enabledMap.set(enabledSource, newVal);
+            if (!state.ack) {
+                // Confirm the write (ioBroker command pattern: adapter acknowledges with ack: true).
+                this.setStateAsync(id.slice(this.namespace.length + 1), { val: newVal, ack: true })
+                    .catch(() => undefined);
+            }
+            return;
+        }
+
         const lcTs  = state.lc === state.ts ? `lc=ts(${state.lc})` : `lc<ts(+${state.ts - state.lc}ms lc=${state.lc})`;
         const ifs   = (): string => `[${[...this.inFlight].join(",") || "∅"}]`;
         const ackCh = state.ack ? "T" : "F";
@@ -224,8 +324,26 @@ class DpCoupler extends utils.Adapter {
         const destination  = forwardEntry ? entry.target : entry.source;
         dpcLog(`[dpc]   ${forwardEntry ? "fwd" : "rev"}  →  ${destination}`);
 
-        // Update last known source state for periodic sync (forward direction only).
-        if (forwardEntry) this.lastState.set(id, state);
+        // Update last known source state and lastValue DP (forward direction only).
+        // Done before the enabled check so the cache and DP always reflect the current
+        // source value, even when the channel is disabled.
+        if (forwardEntry) {
+            this.lastState.set(id, state);
+            const channelId = sourceToChannelId(id);
+            this.setStateAsync(`channels.${channelId}.lastValue`, {
+                val: state.val,
+                ack: true,
+                ts:  state.ts,
+                lc:  state.lc,
+                q:   state.q,
+            }).catch(() => undefined);
+        }
+
+        // Enabled check: skip relay when channel is disabled.
+        if (this.enabledMap.get(entry.source) === false) {
+            dpcLog(`[dpc]   enabled=false → skip`);
+            return;
+        }
 
         // Periodic-only mode: skip event relay when sync is active and relayOnChange is off.
         // Computed inline from this.config so the guard works without an adapter restart when
@@ -275,6 +393,7 @@ class DpCoupler extends utils.Adapter {
     private async onSyncTick(): Promise<void> {
         for (const [sourceId, entry] of this.sourceIndex) {
             if (this.unloading) break;
+            if (this.enabledMap.get(sourceId) === false) continue;
             const cached = this.lastState.get(sourceId);
             if (!cached) continue;
             const dest = entry.target;

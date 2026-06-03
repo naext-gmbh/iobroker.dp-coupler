@@ -7,7 +7,8 @@ value to the configured target datapoint.
 ## Status
 
 **Field-test ready.** Unidirectional and bidirectional relay, ACK filter,
-change-only filter, and periodic sync are implemented. See Roadmap for remaining items.
+change-only filter, periodic sync, and per-channel enable switch with last-value
+datapoints are implemented. See Roadmap for remaining items.
 
 ## Installation
 
@@ -45,6 +46,10 @@ and can be overridden per mapping entry.
 A cycle guard (`inFlight` set) prevents bidirectional relay loops: states
 written by dp-coupler itself are never relayed back.
 
+Each mapping entry also gets two runtime datapoints in the adapter's own namespace
+(see [Channel datapoints](#channel-datapoints) below), allowing individual channels
+to be disabled at runtime without changing the configuration.
+
 The `info.connection` state is `true` while at least one mapping is loaded and
 subscriptions are active.
 
@@ -68,10 +73,11 @@ Enter a JSON array of mapping objects in the **Mapping** tab:
     "propagateAck": true
   },
   {
-    "_comment": "Bidirectional setpoint relay; uses adapter defaults for filters",
+    "_comment": "Bidirectional setpoint relay; disabled initially",
     "source": "0_userdata.0.setpoint",
     "target": "modbus.0.holdingRegisters.12",
-    "bidirectional": true
+    "bidirectional": true,
+    "enabled": false
   },
   {
     "_comment": "Simple relay; all filters from adapter defaults",
@@ -81,14 +87,15 @@ Enter a JSON array of mapping objects in the **Mapping** tab:
 ]
 ```
 
-| Field               | Required | Default          | Description                                                           |
-|---------------------|----------|------------------|-----------------------------------------------------------------------|
-| `source`            | yes      | —                | Full ioBroker state ID to subscribe to                                |
-| `target`            | yes      | —                | Full ioBroker state ID to write to                                    |
-| `bidirectional`     | no       | `false`          | Also subscribes to `target` and relays changes back to `source`       |
-| `forwardOnAck`      | no       | adapter default  | Override: trigger relay when source has `ack: true`                   |
-| `forwardChangesOnly`| no       | adapter default  | Override: relay only if `val` actually changed (suppress re-writes)   |
-| `propagateAck`      | no       | adapter default  | Override: write target with `ack: true` when source had `ack: true`   |
+| Field               | Required | Default          | Description                                                                        |
+|---------------------|----------|------------------|------------------------------------------------------------------------------------|
+| `source`            | yes      | —                | Full ioBroker state ID to subscribe to                                             |
+| `target`            | yes      | —                | Full ioBroker state ID to write to                                                 |
+| `bidirectional`     | no       | `false`          | Also subscribes to `target` and relays changes back to `source`                    |
+| `enabled`           | no       | adapter default  | Seed value for `channels.<id>.enabled` — only applied when the datapoint is created for the first time |
+| `forwardOnAck`      | no       | adapter default  | Override: trigger relay when source has `ack: true`                                |
+| `forwardChangesOnly`| no       | adapter default  | Override: relay only if `val` actually changed (suppress re-writes)                |
+| `propagateAck`      | no       | adapter default  | Override: write target with `ack: true` when source had `ack: true`                |
 
 Unknown keys (e.g. `_comment`) are silently ignored.
 
@@ -106,10 +113,44 @@ value.
 | Forward on ACK               | off     | Trigger relay when source has `ack: true`. Enable for polling sources such as Modbus. |
 | Forward value changes only   | on      | Suppress re-writes where `val` did not change (polling refreshes). |
 | Propagate ACK flag to target | off     | Write target with `ack: true` when source had `ack: true`.    |
+| Enable channels by default   | on      | Initial value of `channels.<id>.enabled` when the datapoint is first created. Can be overridden per entry via the `enabled` mapping field. |
 | Sync interval                | 0 (off) | Periodically re-write all target datapoints with the last known source value (heartbeat/refresh). Set a value and unit (`ms`/`s`/`min`/`h`); `0` disables the feature. |
 | Relay on change              | off     | Only evaluated when sync interval > 0. `on` = event-driven relay in addition to periodic sync. `off` = periodic only (no relay on state change events). |
 
 Save the configuration; the adapter restarts and activates the new mappings.
+
+## Channel datapoints
+
+For every active mapping entry the adapter creates two datapoints in its own namespace:
+
+```
+dp-coupler.0.channels.<channelId>.enabled    boolean, read/write
+dp-coupler.0.channels.<channelId>.lastValue  read-only, type matches source
+```
+
+The channel ID is the source state ID with all dots replaced by underscores — e.g.
+`modbus.0.holdingRegisters.8` becomes `modbus_0_holdingRegisters_8`.
+
+**`enabled`** controls whether the relay is active for this channel at runtime.
+Setting it to `false` stops the adapter from forwarding source changes to the target;
+`lastValue` continues to be updated regardless. For bidirectional entries one switch
+controls both directions. The datapoint persists across adapter restarts.
+
+The initial value is resolved in this order:
+1. `enabledDefault` adapter setting (Defaults tab) — applies to all entries
+2. `enabled` field on the mapping entry — overrides the adapter default for that entry
+3. Once the datapoint exists in the ioBroker database it is never reset; the seed
+   value is only written on first creation.
+
+**`lastValue`** shows the last value received from the source datapoint. It is updated
+on every source change regardless of the `enabled` state, so the current source value
+is always visible even when the channel is disabled. The datapoint type is read from
+the source object definition; the timestamp is preserved from the source state, not
+from the adapter's write time.
+
+On every adapter start `lastValue` is pre-populated from the ioBroker state of the
+source datapoint (using its original timestamp), so the value is immediately visible
+without waiting for the next source change.
 
 ## Mass deployment
 

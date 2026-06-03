@@ -91,32 +91,17 @@ Klasse korrekt benennen.
 
 ### Nach PoC-Bestätigung, schrittweise
 
-- **Enable-Schalter pro Kanal als Datenpunkt** — jede Kopplung erhält einen
+- [x] **Enable-Schalter pro Kanal als Datenpunkt** — jede Kopplung erhält einen
   steuerbaren `enabled`-Datenpunkt im Adapter-Namespace. Damit kann ein Kanal
   zur Laufzeit deaktiviert werden, ohne die Konfiguration zu ändern.
 
-  **Datenpunkt-Schema** (Beispiel für source `modbus.0.holdingRegisters.8`):
-  - `dp-coupler.0.channels.modbus_0_holdingRegisters_8.enabled` — boolescher
-    Schalter, read/write; Punkte im source-Namen werden durch Unterstriche ersetzt
-    (bewährtes Muster, analog smooth-Adapter)
-  - `dp-coupler.0.channels.modbus_0_holdingRegisters_8.lastValue` — letzter
-    weitergeleiteter Wert, read-only (nice-to-have; teilt den Cache mit der
-    zeitgetakteten Synchronisation)
-
-  **Dreistufige Auflösung** (wie alle anderen Flags):
-  1. Adapter-Default `enabledDefault` (native config, Checkbox in Defaults-Tab; default `true`)
-  2. Per-Entry-Feld `enabled?: boolean` in MappingEntry (Initialwert für den Datenpunkt)
-  3. Datenpunkt `channels.<id>.enabled` — autonom nach erstem Start; persistiert
-     über Neustarts (ioBroker-DB). Beim ersten Anlegen wird der Wert aus Stufe 1/2
-     gesetzt (`setObjectAsync` + bedingtes `setStateAsync` wenn noch kein State existiert).
-
-  **Laufzeit-Verhalten:** Alle Subscriptions bleiben erhalten. In `onStateChange`
-  wird der aktuelle Wert des `enabled`-Datenpunkts gelesen; ist er `false`, wird
-  die Relay-Engine übersprungen (kein Kopieren). Einfache Implementation ohne
-  dynamisches Subscribe/Unsubscribe.
-
-  **Bidirektionale Einträge:** Ein Schalter pro MappingEntry (identifiziert über
-  `source`), steuert beide Richtungen gemeinsam.
+  **Implementiert:** `channels.<id>.enabled` (bool, read/write) + `channels.<id>.lastValue`
+  (read-only, echter Typ via `getForeignObjectAsync`, echte Zeitstempel aus dem Quell-State).
+  Dreistufige Auflösung: `enabledDefault` (Adapter-Setting) → `enabled` per MappingEntry
+  → Laufzeit-DP. `lastValue` wird beim Start aus `lastState`-Cache vorbeladen (Zeitstempel
+  der Quelle, nicht des Adapter-Starts). In `onStateChange` wird `lastValue` vor dem
+  `enabled`-Check aktualisiert — der Wert ist also immer aktuell, auch bei deaktiviertem Kanal.
+  `onSyncTick` überspringt deaktivierte Kanäle.
 
 - [x] **Zeitgetaktete Synchronisation** — periodisches Schreiben aller verwalteten
   Ziel-Datenpunkte mit dem zuletzt bekannten Quell-Wert (Heartbeat/Refresh).
